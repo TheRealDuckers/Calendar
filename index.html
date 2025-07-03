@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Interactive iCal Calendar</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.css" rel="stylesheet" />
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      background: #f4f6f9;
+      margin: 0;
+      padding: 0;
+      color: #333;
+    }
+    header {
+      background: #4a90e2;
+      color: white;
+      padding: 2rem;
+      text-align: center;
+      position: relative;
+    }
+    header button {
+      position: absolute;
+      top: 1.5rem;
+      right: 2rem;
+      background: white;
+      color: #4a90e2;
+      border: none;
+      padding: 0.5rem 1rem;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    .container {
+      max-width: 1000px;
+      margin: 2rem auto;
+      background: white;
+      padding: 2rem;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+    }
+    #calendar {
+      margin-top: 2rem;
+    }
+
+    /* Modal Styles */
+    .modal, .event-modal {
+      display: none;
+      position: fixed;
+      z-index: 1000;
+      left: 0; top: 0;
+      width: 100%; height: 100%;
+      background: rgba(0,0,0,0.5);
+      justify-content: center;
+      align-items: center;
+    }
+    .modal-content, .event-content {
+      background: white;
+      padding: 2rem;
+      border-radius: 10px;
+      width: 90%;
+      max-width: 500px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    }
+    .modal-content h2, .event-content h3 {
+      margin-top: 0;
+    }
+    .modal-content input {
+      width: 100%;
+      padding: 0.75rem;
+      margin-top: 1rem;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+    }
+    .modal-content button, .event-content button {
+      margin-top: 1rem;
+      padding: 0.75rem 1.25rem;
+      background: #4a90e2;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>📆 Interactive iCal Calendar</h1>
+    <button onclick="openSettings()">⚙️ Settings</button>
+  </header>
+
+  <div class="container">
+    <div id="calendar"></div>
+  </div>
+
+  <!-- Settings Modal -->
+  <div class="modal" id="settingsModal">
+    <div class="modal-content">
+      <h2>🔗 Add iCal Feed</h2>
+      <input type="text" id="icalUrl" placeholder="Enter iCal (.ics) URL..." />
+      <button onclick="loadICal()">Load Calendar</button>
+    </div>
+  </div>
+
+  <!-- Event Details Modal -->
+  <div class="event-modal" id="eventModal">
+    <div class="event-content">
+      <h3 id="eventTitle">Event Title</h3>
+      <p><strong>Start:</strong> <span id="eventStart"></span></p>
+      <p><strong>End:</strong> <span id="eventEnd"></span></p>
+      <p><strong>Description:</strong> <span id="eventDesc"></span></p>
+      <button onclick="closeEventModal()">Close</button>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/ical.js@1.4.0/build/ical.min.js"></script>
+<script>
+  let calendar;
+
+  document.addEventListener('DOMContentLoaded', function () {
+    const calendarEl = document.getElementById('calendar');
+    calendar = new FullCalendar.Calendar(calendarEl, {
+      initialView: 'dayGridMonth',
+      headerToolbar: {
+        left: 'prev,next today',
+        center: 'title',
+        right: 'dayGridMonth,timeGridWeek,timeGridDay'
+      },
+      eventClick: function(info) {
+        document.getElementById('eventTitle').textContent = info.event.title;
+        document.getElementById('eventStart').textContent = info.event.start.toLocaleString();
+        document.getElementById('eventEnd').textContent = info.event.end ? info.event.end.toLocaleString() : 'N/A';
+        document.getElementById('eventDesc').textContent = info.event.extendedProps.description || 'No description';
+        document.getElementById('eventModal').style.display = 'flex';
+      }
+    });
+    calendar.render();
+
+    // Load saved iCal URL if available
+    const savedUrl = localStorage.getItem('icalUrl');
+    if (savedUrl) {
+      loadICal(savedUrl);
+    }
+  });
+
+  function openSettings() {
+    document.getElementById('settingsModal').style.display = 'flex';
+    document.getElementById('icalUrl').value = localStorage.getItem('icalUrl') || '';
+  }
+
+  function closeEventModal() {
+    document.getElementById('eventModal').style.display = 'none';
+  }
+
+  async function loadICal(url = null) {
+    if (!url) {
+      url = document.getElementById('icalUrl').value.trim();
+    }
+    if (!url) return alert('Please enter a valid iCal URL.');
+
+    try {
+      const response = await fetch(url);
+      const text = await response.text();
+      const jcalData = ICAL.parse(text);
+      const comp = new ICAL.Component(jcalData);
+      const vevents = comp.getAllSubcomponents('vevent');
+
+      const events = vevents.map(event => {
+        const e = new ICAL.Event(event);
+        return {
+          title: e.summary,
+          start: e.startDate.toJSDate(),
+          end: e.endDate.toJSDate(),
+          allDay: e.startDate.isDate,
+          description: e.description || ''
+        };
+      });
+
+      calendar.removeAllEvents();
+      calendar.addEventSource(events);
+      document.getElementById('settingsModal').style.display = 'none';
+
+      // Save to localStorage
+      localStorage.setItem('icalUrl', url);
+    } catch (err) {
+      console.error(err);
+      alert('Failed to load or parse the iCal feed.');
+    }
+  }
+
+  // Close modals on background click
+  window.onclick = function(event) {
+    if (event.target.classList.contains('modal')) {
+      event.target.style.display = 'none';
+    }
+    if (event.target.classList.contains('event-modal')) {
+      event.target.style.display = 'none';
+    }
+  }
+</script>
+
+
+</body>
+</html>
